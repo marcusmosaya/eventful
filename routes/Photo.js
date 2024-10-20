@@ -13,14 +13,15 @@ const storage=multer.diskStorage({
     },
     filename:(req,file,cb)=>{
       cb(null,Date.now()+path.extname(file.originalname));
-    }
+    },
   });
-  const upload=multer({storage:storage,limits:{fileSize:10*1024*1024},dest:'uploads/'});
+  const upload=multer({storage:storage,dest:'uploads/'});
 
-router.post('/:eventId/upload',upload.single('image'),Photo.UploadMeta);
+router.post('/:eventId/upload',upload.array('image',100),Photo.UploadMeta);
 router.get('/:eventId',Middleware.authenticate,Photo.Gallery);
 router.get('/:eventId/download-zip',Photo.DownloadZip);
 router.get('/:eventId/:photoId',Middleware.authenticate,Photo.PhotoView);
+router.delete('/:eventId/:photoId',Middleware.authenticate,Photo.Delete);
 
 
  module.exports=router;

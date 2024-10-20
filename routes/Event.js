@@ -9,6 +9,7 @@ router.get('/list',Middleware.authenticate,Event.List);
 router.get('/:eventId',Middleware.authenticate,Event.EventInfo);
 router.put('/:eventId',Middleware.authenticate,Event.Update);
 router.delete('/:eventId',Middleware.authenticate,Event.Delete);
+router.get('/:eventId/bill',Middleware.authenticate,Event.Bill);
 
 //We need a separate router for these
 router.post('/:eventId/visitors',Middleware.authenticate,Event.Visitor);

@@ -8,7 +8,7 @@ const authenticate=(req,res,next)=>{
       jwt.verify(token,'qwertyuiop32223456',(err,user)=>{
         if (err) {
             console.log(err);
-            return res.status(403).json({message:'Token is not valid'});
+            return res.status(403).json({message:'Seems like our token expired'});
         }
         req.user=user;
         next();

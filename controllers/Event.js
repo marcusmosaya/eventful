@@ -1,6 +1,8 @@
 const Event=require('../models/Event');
 const fs=require('fs').promises;
-const Util=require('../utils/Fun')
+const Util=require('../utils/Fun');
+const User=require('../models/User');
+const fsE=require('fs-extra');
 const Register=async (req,res)=>{
 
     let isUnique=false,eventId='';
@@ -65,6 +67,9 @@ const EventInfo=async (req,res)=>{
     console.log(eventId);
     try {
         const allEvents=await Event.findOne({where:{UserUserId:userId,eventId:eventId}})
+        if(allEvents===null){
+            return res.status(401).json({message:'unauthorized'});
+        }
         return res.json(allEvents);
     } catch (error) {
         console.log(error)
@@ -84,6 +89,13 @@ const Update=async (req,res)=>{
             console.log('file created');
             }
         }
+        if(accessibility==='true'&&previousAccessibility==='false'){
+            await fs.unlink(`events/${eventId}.xlsx`,(err)=>{
+                if(err){
+                    throw err;
+                }
+            });
+        }
         return res.json({success:true,message:"The event has been updated"});
     } catch (error) {
         console.log(error)
@@ -94,8 +106,15 @@ const Delete=async (req,res)=>{
     let userId=req.user.userId;
     let eventId=req.params.eventId;
     try {
-        const deleted=await Event.destroy({where:{eventId:eventId,UserUserId:userId}})
+        const deleted=await Event.destroy({where:{eventId:eventId,UserUserId:userId}});
+        await fs.unlink(`events/${eventId}.xlsx`,(err)=>{
+            if(err){
+                throw err;
+
+            }
+        });
         return res.json({success:true,message:'Successfully Cancelled'});
+
     } catch (error) {
         console.log(error)
         return res.status(500).json({error:"something went wrong"});
@@ -123,21 +142,25 @@ const Confirm=async (req,res)=>{
     }
     return res.json({success:false,message:'You are not on the list'});
 }
-const Visitor=(req,res)=>{
+const Visitor=async (req,res)=>{
     let {eventId}=req.params;
     let {emailPhone}=req.body;
+    let userId=req.user.userId;
     let tempEmailPhone=emailPhone;
     let data=[];
-
+    let authorizedUser=await  Event.findOne({where:{eventId:eventId,UserUserId:userId}});
+    if(authorizedUser===null){
+       return res.status(401).json({message:'Unauthorized'});
+    }
+    
     for (let index = 0; index < tempEmailPhone.length; index++) {
         let instance=[{emailPhone:tempEmailPhone[index]}];
         data.push(instance);
     }
     let created=Util.addRowToXlsx(eventId,data);
     if(created){
-        return res.json({success:true,message:'Add Event'})
+        return res.json({success:true,message:'Successfully Added'});
     }
-    return res.json({success:false,message:'Add Event'})
 }
 const Remove=async (req,res)=>{
      let {eventId}=req.params;
@@ -188,8 +211,9 @@ const ReadVisitorList=async (req,res)=>{
     let userId=req.user.userId;
     try {
        let isAuthorized=await Event.findOne({where:{eventId:eventId,UserUserId:userId}});
-       if(isAuthorized.length<1){
-           return res.json({success:false,message:'unauthorized'});
+       console.log(isAuthorized);
+       if(isAuthorized===null){
+           return res.status(401).json({success:false,message:'unauthorized'});
        }
        let visitorList=Util.readRowFromXlsx(eventId);
        return res.json(visitorList);
@@ -201,6 +225,83 @@ const ReadVisitorList=async (req,res)=>{
 
 
 }
+const Billing=async (eventId,userId)=>{
+    const COST_PER_FILE_SIZE_IN_MB=0.0005;
+    const COST_FILE=0.05;
+    let fileNumber=0,totalSize=0
+    try{
+        let dir=await fs.readdir(`uploads/${eventId}`);
+          console.log(dir)
+        for await (drint of dir){
+            fileNumber+=1;  
+            console.log(drint)  
+            let fileStats=await fs.stat(`uploads/${eventId}/${drint}`)
+            totalSize+=fileStats.size;                
+        }
+        let user=await User.findOne({where:{userId:userId},attributes:['email']});
+        user=user.dataValues.email;
+        let name=user.split('@')
+        let invoiceNUmber=Util.randomString(8,'T');
+        console.log(name)
+        let response={
+            folderSize:Math.ceil(totalSize/(1024*1024)),
+            photosNumber:fileNumber,
+            totalCost:Number((COST_FILE*fileNumber).toFixed(2))+Number((COST_PER_FILE_SIZE_IN_MB*Math.ceil(totalSize/(1024*1024)))),
+            name:name[0],
+            email:user,
+            number:invoiceNUmber
+        }
+        console.log(fileNumber);
+        console.log(totalSize);
+        return res.json({success:true,response});
+
+    } catch(err){
+        console.log(err);
+        return res.status(500).json({error:"something went wrong"});
+    }
+    
 
 
-module.exports={Register,Read,List,EventInfo,Update,Delete,Confirm,Accessible,Visitor,Visitor,Remove,UpdateVisitorList,ReadVisitorList};
+}
+const Bill=async (req,res)=>{
+    const COST_PER_FILE_SIZE_IN_MB=0.0005;
+    const COST_FILE=0.05;
+    let {eventId}=req.params;
+    let fileNumber=0,totalSize=0,userId=req.user.userId;
+
+    try{
+        let dir=await fs.readdir(`uploads/${eventId}`);
+          console.log(dir)
+        for await (drint of dir){
+            fileNumber+=1;  
+            console.log(drint)  
+            let fileStats=await fs.stat(`uploads/${eventId}/${drint}`)
+            totalSize+=fileStats.size;                
+        }
+        let user=await User.findOne({where:{userId:userId},attributes:['email']});
+        user=user.dataValues.email;
+        let name=user.split('@')
+        let invoiceNUmber=Util.randomString(8,'T');
+        console.log(name)
+        let response={
+            folderSize:Math.ceil(totalSize/(1024*1024)),
+            photosNumber:fileNumber,
+            totalCost:Number((COST_FILE*fileNumber).toFixed(2))+Number((COST_PER_FILE_SIZE_IN_MB*Math.ceil(totalSize/(1024*1024)))),
+            name:name[0],
+            email:user,
+            number:invoiceNUmber
+        }
+        console.log(fileNumber);
+        console.log(totalSize);
+        return res.json({success:true,response});
+
+    } catch(err){
+        console.log(err);
+        return res.status(500).json({error:"something went wrong"});
+    }
+    
+
+}
+
+
+module.exports={Register,Read,List,EventInfo,Update,Delete,Confirm,Accessible,Visitor,Visitor,Remove,UpdateVisitorList,ReadVisitorList,Bill};
